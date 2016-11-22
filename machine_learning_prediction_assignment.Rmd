@@ -1,0 +1,119 @@
+---
+title: "Practical Machine Learning: Prediction Assignment"
+author: "Khalaq Zaman"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#1 Introduction
+By using training devices for example Jawbone Up, Nike FuelBand, and Fitbit we can  gather a large amount of data about personal activity. These devices are the part of the quantified self movement. A group of enthusiastic people  take measurements about themselves regularly to improve their health, in order to find patterns in their training  behavior. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. At the time of the collecting data, 6 participants were requested to perform barbell lifts in five different ways, one of the ways was done correctly and other four were done incorrectly.  In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants to build a prediction model. Afterwards, we will use this prediction model to predict the outcome of the test data set.   More information is available from the website here: http://groupware.les.inf.puc-rio.br/har.
+
+
+
+
+
+
+
+#2 Data Loading and Cleaning
+
+In the following we will load the packages which are required to build the prediction models.   
+
+```{r, warning=FALSE, message=FALSE}
+#setwd("C:/Users/Md/Desktop/machine_learning/week4/Prediction_Assignment_WriteUp")
+set.seed(1977)
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+```
+
+We have collected the data set, training and testing data set as instructed by Coursera Practical Machine Learning course instructor.  
+```{r}
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+              destfile = "./pml-training1.csv")
+
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+              destfile = "./pml-testing1.csv")
+
+```
+In the following we read the *.csv files. In the *.csv files, many data with "NA", "#DIV/0!", or empty space""  exist. We replace everything with "NA".
+```{r}
+data_training <- read.csv("pml-training1.csv", na.strings=c("NA","#DIV/0!",""))
+data_testing <- read.csv("pml-testing1.csv", na.strings=c("NA","#DIV/0!",""))
+```
+In the following we calculated the percentage of "NA" in every column of the data sets. If any column contains "NA"s more than 70%, we excluded that column for the model building.
+
+```{r}
+na_tag   <- sapply(data_training, function(x) mean(is.na(x)))
+na_tag1 <- na_tag>0.7
+data_training <- data_training[,!na_tag1]
+data_testing <- data_testing[,!na_tag1]
+dim(data_training)
+dim(data_testing)
+```
+
+Afterwards, we calculated the variance for every column of the data set. If the variance is very small, then we excluded that column from the building the prediction model.
+```{r}
+zero_var <- nearZeroVar(data_training)
+data_training <- data_training[,-zero_var]
+data_testing <- data_testing[,-zero_var]
+str(data_training)
+```
+In the following we will eliminate the first 6 column from the data sets, because they are  time-series type data or are not numeric.
+```{r}
+data_training <- data_training[,-(1:6)]
+data_testing <- data_testing[,-(1:6)]
+```
+#3 Partitioning the Data Set
+
+
+According to the Coursera Practical Machine Learning Instructor, we are splitting the data set into 70% (to be used for the training of the model) and 30%(to be used for validation of the model) data set.
+
+```{r}
+set.seed(1977)
+train_set_id  <- createDataPartition(data_training$classe, p=0.7, list=FALSE)
+data_training_set <- data_training[train_set_id, ]
+data_validation_set  <- data_training[-train_set_id, ]
+
+```
+#4 Prediction Model Building
+To building the prediction model for the given data set, we will use two  different prediction model building algorithm, a) Decision Tree Algorithm and b) Random Forest Algorithm
+
+##4.1 Using Decision Tree Model
+As it uses a single tree to build the prediction model, one should not expect high accuracy in the prediction model. A accuracy level in between 70 - 80% should be expected.
+```{r}
+set.seed(1977)
+model_fit_dt <- rpart(classe ~ ., data = data_training_set, method="class")
+fancyRpartPlot(model_fit_dt)
+```
+
+
+```{r}
+predict_result_dt <- predict(model_fit_dt, data_validation_set, type = "class")
+confusionMatrix(predict_result_dt, data_validation_set$classe)
+```
+From the model using Decision Tree, we observed that the accuracy is 76%.
+
+##4.2 Using Random Forest Model
+As the random forest algorithm uses multiple decision trees, a improved accuracy could be expected. In the following, we will use 10 decision trees for the training of the prediction model.  
+```{r}
+set.seed(1977)
+model_fit_rand_for <- train(classe ~ ., data=data_training_set, method="rf", ntree=10, importance = T, trControl = trainControl(method = "cv", classProbs=TRUE,savePredictions=TRUE,allowParallel=TRUE, number = 10))
+predict_result_rand_for <- predict(model_fit_rand_for, data_validation_set)
+confusionMatrix(predict_result_rand_for, data_validation_set$classe)
+```
+From the output above, we see that the accuracy is 99%. By increasing the number of decision trees in the random forest model, the accuracy of the prediction model can be improved.
+
+#5 Predicting the Test Data Set 
+
+A model using decision tree algorithm gives a accuracy of 76%, on the other hand using random forest algorithm we get 99% accuracy. For that reason we will use the model using random forest algorithm to predict the outcome the test data set.
+```{r}
+predict_result_testing_data <- predict(model_fit_rand_for, data_testing)
+predict_result_testing_data
+
+```
+
